@@ -289,7 +289,21 @@ body {
   </div>
   <div id="log_board"></div>
 </body>
-<script src="/assets/js/screen.js"></script>
+<script>
+(()=>{
+  const root = document.documentElement;
+  const resize = () => {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    root.style.setProperty("--vw",width+"px");
+    root.style.setProperty("--vh",height+"px");
+    root.style.setProperty("--vmin",(width<height?width:height)+"px");
+    root.style.setProperty("--vmax",(width>height?width:height)+"px");
+  }
+  resize();
+  window.addEventListener("resize",resize);
+})();
+</script>
 <script>
 
 const set_transform = (id,n,v) => {
