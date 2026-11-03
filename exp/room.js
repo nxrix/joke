@@ -1,6 +1,6 @@
 // room.js — nostr transport, lobby (create/join/seats/kick/bots), chat, deck plumbing.
 import * as nxstr from "https://cdn.jsdelivr.net/gh/nxrix/nxstr@1.0.2/index.js";
-import { Table } from "./deck.js";
+import { Table } from "./deck.js?v=7";
 
 const RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net"];
 const KIND = 4242;
@@ -85,6 +85,21 @@ export class Room {
   _push(el) { this.logEl.appendChild(el); this.logEl.scrollTop = this.logEl.scrollHeight; }
 
   /* ---------- host lobby persistence (survives reload) ---------- */
+  _ensureHostSeat() {
+    if (!this.isHost) return;
+    const L = this.lobby;
+    if (!L.seats.includes(this.me)) {
+      // prefer seat 0 for host
+      if (L.seats[0] == null) L.seats[0] = this.me;
+      else {
+        const free = L.seats.indexOf(null);
+        if (free >= 0) L.seats[free] = this.me;
+        else L.seats[0] = this.me;
+      }
+    }
+    L.names[this.me] = this.name || L.names[this.me] || "Host";
+  }
+
   _saveHostLobby() {
     if (!this.isHost || !this.id) return;
     try {
@@ -180,6 +195,7 @@ export class Room {
 
   _startJoinLoop() {
     if (this._joinTimer || !this.name) return;
+    const hasOpen = () => Object.values(this.sockets).some(ws => ws && ws.readyState === 1);
     const ask = () => {
       if (!this.id || this.lobby.banned.includes(this.me)) return;
       if (this.lobby.names[this.me]) {
@@ -187,10 +203,11 @@ export class Room {
         localStorage.lastRoom = this.id;
         return;
       }
+      if (!hasOpen()) return; // wait until a relay is actually connected
       this._publish({ k: "join", n: this.name });
     };
-    setTimeout(ask, 500);
-    this._joinTimer = setInterval(ask, 3000);
+    setTimeout(ask, 300);
+    this._joinTimer = setInterval(ask, 2000);
   }
 
   async _onEvent(event) {
@@ -213,6 +230,7 @@ export class Room {
     switch (p.k) {
       case "join":
         if (!this.isHost || L.status !== "lobby") return;
+        this._ensureHostSeat();
         if (!L.seats.includes(from)) {
           const free = L.seats.indexOf(null);
           if (free < 0) return;
@@ -223,7 +241,14 @@ export class Room {
         break;
       case "state":
         if (from !== this.hostId || p.version <= L.version) return;
-        Object.assign(L, p.state); L.version = p.version;
+        if (!p.state || !Array.isArray(p.state.seats)) return;
+        L.seats = p.state.seats.slice();
+        L.names = { ...(p.state.names || {}) };
+        L.banned = (p.state.banned || []).slice();
+        L.status = p.state.status || "lobby";
+        L.gameId = p.state.gameId ?? null;
+        L.seatCount = p.state.seatCount || L.seats.length || this.seatCount;
+        L.version = p.version;
         if (L.seatCount && L.seatCount !== this.seatCount) {
           this.seatCount = L.seatCount;
           const u = new URL(location.href);
@@ -260,9 +285,18 @@ export class Room {
   }
 
   _broadcast() {
+    this._ensureHostSeat();
     const L = this.lobby; L.version++;
-    const { seats, names, banned, status, gameId, seatCount } = L;
-    this._publish({ k: "state", version: L.version, state: { seats, names, banned, status, gameId, seatCount } });
+    // clone so JSON is a plain snapshot (no weird refs)
+    const state = {
+      seats: L.seats.slice(),
+      names: { ...L.names },
+      banned: L.banned.slice(),
+      status: L.status,
+      gameId: L.gameId,
+      seatCount: L.seatCount || this.seatCount,
+    };
+    this._publish({ k: "state", version: L.version, state });
     this._saveHostLobby();
   }
   _begin() {
@@ -331,10 +365,15 @@ export class Room {
       if (!this._readName()) return;
       this.hostId = this.me; this.id = this.me + "-" + Math.random().toString(36).slice(2, 7);
       const u = new URL(location.href); u.searchParams.set("room", this.id); history.replaceState(null, "", u);
-      L.names[this.me] = this.name; L.seats[0] = this.me; L.seatCount = this.seatCount;
+      L.names = { [this.me]: this.name };
+      L.seats = Array(this.seatCount).fill(null);
+      L.seats[0] = this.me;
+      L.seatCount = this.seatCount;
+      L.status = "lobby"; L.gameId = null; L.version = 0; L.banned = [];
       localStorage.lastRoom = this.id;
       this._connect();
-      this._saveHostLobby();
+      // publish initial lobby so joiners can see the host
+      setTimeout(() => this._broadcast(), 400);
     } else if (act === "join") {
       if (!this._readName()) return;
       this._connect();

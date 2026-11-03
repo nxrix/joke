@@ -93,6 +93,7 @@ body { background-color: #eee; overflow-y: auto; }
   padding: calc(var(--vmin)/100*0.7);
   font-size: calc(var(--vmin)/100*2.3); white-space: nowrap;
   box-shadow: 0 2px 10px #0002; max-width: 92%; }
+#bar span { margin: 0 4px; }
 #bar button { font-size: inherit; padding: calc(var(--vmin)/100*0.5) calc(var(--vmin)/100*1.6);
   border-radius: calc(var(--vmin)/100*1.2); }
 

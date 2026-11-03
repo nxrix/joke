@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Joke</title>
-<link rel="stylesheet" href="hokm.css?v=5">
+<link rel="stylesheet" href="hokm.css?v=8">
 </head>
 <body>
 <div class="cards" id="board">
@@ -23,7 +23,7 @@
 </div>
 <div id="lobby"></div>
 <script type="module">
-import { runHokm } from "./hokm.js";
+import { runHokm } from "./hokm.js?v=7";
 const params = new URLSearchParams(location.search);
 const n = params.get("p") === "2" ? 2 : 4;
 runHokm(n);
