@@ -1,4 +1,4 @@
-// hokm.js — Hokm rules and game flow, for 4 players (2 teams) or 2 players. Used by 4p.html and 2p.html:
+// hokm.js - Hokm rules and game flow, for 4 players (2 teams) or 2 players. Used by 4p.html and 2p.html:
 //     import { runHokm } from "./hokm.js";  runHokm(4);   // or runHokm(2)
 //
 // Layers:  room.js (nostr + lobby + chat)  ->  deck.js (shuffled deck, no host)  ->  this file (rules)  ->  cards.js (visuals)
@@ -16,11 +16,11 @@ const POINTS_TO_WIN = 7;   // a game ends at 7 points
 
 export function runHokm(N) {
   initViewport();
-  const board = new Board($("board"));
+  const board = new Board($("board"), N);
   const bar = $("bar");
   const room = new Room({ seatCount: N, lobbyEl: $("lobby"), logEl: $("log"), chatInput: $("chat"), onStart, onLobby });
 
-  let G = null;        // the game (across hands): { n, score:[t0,t1], hakem, gen }
+  let G = null;        // the game (across hands): { n, score:[t0,t1], king, gen }
   let H = null;        // the hand being played
   let tables = {};     // my deck Table (+ the bots' tables when I'm the host)
   let mySeat = 0;
@@ -38,9 +38,9 @@ export function runHokm(N) {
      ===================================================================== */
   function onStart() {
     mySeat = room.seats.indexOf(room.me);
-    G = { n: 0, score: [0, 0], hakem: null, gen: room.gameId };
+    G = { n: 0, score: [0, 0], king: null, gen: room.gameId };
     board.setScore(0, 0);
-    room.log(`Game started — first to ${POINTS_TO_WIN} points.`);
+    room.log(`Game started - first to ${POINTS_TO_WIN} points.`);
     runHands(G);
   }
 
@@ -48,6 +48,7 @@ export function runHokm(N) {
     G = null; H = null; tables = {};
     setBar("");
     for (let v = 0; v < 4; v++) board.setTag(v, "", false);
+    board.showLast([]);
     for (const id of ["counter_t1", "counter_t2"]) $(id).style.opacity = 0;
     board.reset();
   }
@@ -70,7 +71,7 @@ export function runHokm(N) {
     if (g.n > 1) { setBar(""); await board.reset(); }       // previous hand's cards back to the stack
 
     H = {
-      id, seats, hakem: g.hakem, trump: null,
+      id, seats, king: g.king, trump: null,
       cards: seats.map(() => []),        // seat -> deck positions currently in that hand
       owner: {},                         // position -> seat it was dealt to
       known: {},                         // table id -> { position: card value }  (what each of MY tables may see)
@@ -90,18 +91,18 @@ export function runHokm(N) {
     room.log("Shuffling…");
     await Promise.all(all.map(t => t.start()));
 
-    // First hand: the Hakem (trump caller, deals first, leads first) is picked by a fair random number.
-    if (H.hakem === null) {
-      const picks = await Promise.all(all.map(t => t.random("hakem", N)));
-      H.hakem = g.hakem = picks[0];
+    // First hand: the King (trump caller, deals first, leads first) is picked by a fair random number.
+    if (H.king === null) {
+      const picks = await Promise.all(all.map(t => t.random("king", N)));
+      H.king = g.king = picks[0];
     }
-    room.log(`<b>${nameOfSeat(H.hakem)}</b> is the Hakem 👑`);
+    room.log(`<b>${nameOfSeat(H.king)}</b> is the King 👑`);
     updateTags();
 
-    if (N === 4) await dealFour(H.hakem); else await dealTwo(H.hakem);
+    if (N === 4) await dealFour(H.king); else await dealTwo(H.king);
 
     H.playing = true;
-    H.turn = H.hakem;
+    H.turn = H.king;
     return new Promise(resolve => { H.finish = resolve; refresh(); drain(); });
   }
 
@@ -122,7 +123,7 @@ export function runHokm(N) {
   }
   const addHand = (seat, ps) => H.cards[seat].push(...ps);
 
-  // 4 players: 5 cards each (Hakem first) -> Hakem picks trump -> 8 more cards each.
+  // 4 players: 5 cards each (King first) -> King picks trump -> 8 more cards each.
   async function dealFour(hk) {
     const batch = (from, size) => Promise.all(range(0, 4).map(async i => {
       const s = (hk + i) % 4, ps = range(from + size * i, size);
@@ -134,7 +135,7 @@ export function runHokm(N) {
   }
 
   // 2 players (rules: pagat.com / catsatcards.com):
-  //   Hakem gets 5 cards, names trump, discards 3 of them. The other player gets 5 and discards 2.
+  //   King gets 5 cards, names trump, discards 3 of them. The other player gets 5 and discards 2.
   //   Then they alternate drawing from the stock until both have 13: you look at the top card; keep it
   //   (the next stock card is thrown away unseen) or skip it (it is thrown away and you MUST take the next one).
   async function dealTwo(hk) {
@@ -145,7 +146,7 @@ export function runHokm(N) {
     await dealTo(ot, range(5, 5)); addHand(ot, range(5, 5)); layout();
     await discardPhase(ot, 2);
 
-    const draws = 21;                                              // Hakem 11 (2 -> 13), other 10 (3 -> 13)
+    const draws = 21;                                              // King 11 (2 -> 13), other 10 (3 -> 13)
     const drawer = d => (d % 2 ? ot : hk);
     let next = dealTo(drawer(0), [10]);
     for (let d = 0; d < draws; d++) {
@@ -154,6 +155,7 @@ export function runHokm(N) {
       next = d + 1 < draws ? dealTo(drawer(d + 1), [p + 2]) : null; // look-ahead: next player's first card, saves a round trip
 
       board.place(p, { x: 14, y: 0, ry: pid === room.me ? 0 : 180, s: 1.1, zi: 90 });   // the card being looked at
+      board.setMine(p, pid === room.me);
       if (pid === room.me) room.send({ k: "draw", g: H.id, d, keep: await askKeep() });
       else if (room.isHost && room.isBot(pid)) { await sleep(700); room.send({ k: "draw", g: H.id, d, keep: botKeep(pid, p) }, pid); }
       const keep = !!(await room.waitFor((from, m) => m.k === "draw" && m.g === H.id && m.d === d && from === pid)).p.keep;
@@ -165,7 +167,7 @@ export function runHokm(N) {
   }
   const throwAway = (seat, p) => board.discard(viewOf(seat), p, H.disc[seat]++);
 
-  // The Hakem looks at their first 5 cards and names trump.
+  // The King looks at their first 5 cards and names trump.
   async function chooseTrump(hk) {
     const pid = H.seats[hk];
     if (pid === room.me) {
@@ -281,6 +283,7 @@ export function runHokm(N) {
     setTimeout(() => {                                  // let everybody see the trick, then pile it up
       if (!H || H.id !== id) return;
       trick.forEach(pl => board.pile(pl.pos, team === myTeam(), n));
+      board.showLast(trick.map(pl => pl.card));            // the rules allow looking at the last trick
       H.hold = false;
       if (last) finishHand(); else refresh();
     }, 1100);
@@ -332,17 +335,17 @@ export function runHokm(N) {
      ===================================================================== */
   async function finishHand() {
     const h = H, g = G, my = myTeam();
-    const win = h.won[0] > h.won[1] ? 0 : 1, loserTricks = h.won[1 - win], hakemTeam = teamOf(h.hakem);
-    // 1 point for a win, 2 for a kot (7-0), 3 for a "hakem kot" (the Hakem's side gets 7-0'd)
-    const pts = loserTricks > 0 ? 1 : win === hakemTeam ? 2 : 3;
+    const win = h.won[0] > h.won[1] ? 0 : 1, loserTricks = h.won[1 - win], kingTeam = teamOf(h.king);
+    // 1 point for a win, 2 for a kot (7-0), 3 for a "king kot" (the King's side gets 7-0'd)
+    const pts = loserTricks > 0 ? 1 : win === kingTeam ? 2 : 3;
     g.score[win] += pts;
     board.setScore(g.score[my], g.score[1 - my]);
     const who = N === 4 ? (win === my ? "Your team" : "The other team") : (win === mySeat ? "You" : room.nameOf(h.seats[win]));
-    room.log(`Hand over ${h.won[my]}–${h.won[1 - my]}. <b>${who}</b> +${pts}` + (pts === 2 ? " (kot!)" : pts === 3 ? " (hakem kot!!)" : "") +
-      ` — score ${g.score[my]}–${g.score[1 - my]}`);
+    room.log(`Hand over ${h.won[my]}-${h.won[1 - my]}. <b>${who}</b> +${pts}` + (pts === 2 ? " (kot!)" : pts === 3 ? " (king kot!!)" : "") +
+      ` - score ${g.score[my]}-${g.score[1 - my]}`);
 
-    // The Hakem keeps the job if their side won; otherwise it passes on.
-    if (win !== hakemTeam) g.hakem = N === 4 ? (h.hakem + 1) % 4 : 1 - h.hakem;
+    // The King keeps the job if their side won; otherwise it passes on.
+    if (win !== kingTeam) g.king = N === 4 ? (h.king + 1) % 4 : 1 - h.king;
 
     // Everybody reveals seeds + keys: this proves the shuffles were honest, and lets us check follow-suit.
     const audits = Object.values(tables).map(t => t.end().then(r => ({ t, r }), err => ({ t, err })));
@@ -352,7 +355,7 @@ export function runHokm(N) {
 
     if (g.score[win] >= POINTS_TO_WIN) {
       const text = N === 4 ? (win === my ? "Your team wins!" : "The other team wins!") : (win === mySeat ? "You win!" : `${room.nameOf(h.seats[win])} wins!`);
-      room.gameOver(`${text} ${g.score[my]}–${g.score[1 - my]}`);
+      room.gameOver(`${text} ${g.score[my]}-${g.score[1 - my]}`);
       return h.finish(true);
     }
     await sleep(2000);
@@ -387,16 +390,17 @@ export function runHokm(N) {
 
   function updateTags() {
     for (let v = 0; v < 4; v++) board.setTag(v, "", false);
-    H.seats.forEach((pid, s) => board.setTag(viewOf(s), room.nameOf(pid) + (H.hakem === s ? " 👑" : ""), H.playing && H.turn === s));
+    const showTricks = H.playing || H.won[0] + H.won[1] > 0;
+    H.seats.forEach((pid, s) => {
+      const mate = N === 4 && teamOf(s) === myTeam();           // me + my partner share a colour
+      const text = `<span>${room.nameOf(pid)}${H.king === s ? " 👑" : ""}</span>` + (showTricks ? `<span class="tk">${H.won[teamOf(s)]}</span>` : "");
+      board.setTag(viewOf(s), text, H.playing && H.turn === s, mate);
+    });
   }
 
   function refresh() {
     layout();
     updateTags();
-    if (H.playing) {
-      const my = myTeam();
-      setBar(`<span>Tricks ${H.won[my]}–${H.won[1 - my]}${H.turn === mySeat && !H.hold ? " · your turn" : ""}</span>`);
-    }
     scheduleBot();
   }
 }

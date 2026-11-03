@@ -44,8 +44,9 @@ export function initViewport() {
 /* ---------- the board ---------- */
 // Views: 0 = me (bottom), 1 = left, 2 = across (top), 3 = right
 export class Board {
-  constructor(boardEl) {
+  constructor(boardEl, players = 4) {
     this.boardEl = boardEl;
+    this.players = players;              // 2 or 4: decides where won tricks are piled
     this.cards = [];
     this.z = 60;                         // z-index counter for cards dropped on the table
     for (let pos = 0; pos < 52; pos++) {
@@ -56,6 +57,9 @@ export class Board {
       this.cards.push(el);
       this.place(pos, { ry: 180, zi: pos / 2 });      // everything starts as a face-down stack
     }
+    this.lastEl = document.createElement("div");      // the last trick, shown small
+    this.lastEl.id = "last_trick";
+    boardEl.appendChild(this.lastEl);
     this.tags = [0, 1, 2, 3].map(v => {
       const t = document.createElement("div");
       t.className = "nametag v" + v;
@@ -83,11 +87,12 @@ export class Board {
     front.setAttribute("after-content", cardText(value));
   }
 
-  setClickable(pos, fn) {
-    const el = this.cards[pos];
-    el.classList.toggle("t2", !!fn);
-    el.onclick = fn ? () => fn(pos) : null;
-  }
+  // "t2" = this card is mine: gives it the corner index + outline. Every card in MY hand always has it.
+  setMine(pos, yes) { this.cards[pos].classList.toggle("t2", !!yes); }
+  // Click handler only (the look is decided by setMine)
+  setClickable(pos, fn) { this.cards[pos].onclick = fn ? () => fn(pos) : null; }
+  // Cards that are not in my hand any more (played, piled, discarded) lose the "mine" look
+  _release(pos) { this.setMine(pos, false); this.setClickable(pos, null); }
 
   // Lay out one player's hand as a fan. My own hand is face-up and clickable; others are face-down.
   fan(view, positions, { onClick = null, raised = new Set() } = {}) {
@@ -102,6 +107,7 @@ export class Board {
         { x: 45 + b * 2 - up, y: (i - s) * k, rx: 180, rz: 270 + (i - s) * 2, zi: m - i },
       ][view];
       this.place(pos, spot);
+      this.setMine(pos, view === 0);
       this.setClickable(pos, view === 0 ? onClick : null);
     });
   }
@@ -114,21 +120,34 @@ export class Board {
       { x: nx, y: ny - 20, rz: nr + 180 }, { x: nx + 20, y: ny, rz: nr + 270 },
     ][view];
     this.place(pos, { ...spot, zi: this.z++ });
-    this.setClickable(pos, null);
+    this._release(pos);
   }
 
-  // Won tricks pile up face-down: mine = my team's pile, otherwise the other team's. n = tricks already in it.
+  // Won tricks pile up face-down. n = tricks already in that pile.
+  //  4 players: one pile per TEAM (mine = top-left row near my partner, theirs = left column).
+  //  2 players: one pile per PLAYER, on opposite sides (mine bottom-left, theirs top-right).
   pile(pos, mine, n) {
-    this.place(pos, mine
-      ? { x: -30 + n * 4, y: -30 + (n % 2) * 2.5, ry: 180, rz: 180, s: 0.5, zi: n - 5 }
-      : { x: -30 + (n % 2) * 2.5, y: 30 - n * 4, ry: 180, rz: 270, s: 0.5, zi: n - 5 });
-    this.setClickable(pos, null);
+    let spot;
+    if (this.players === 2) {
+      spot = mine ? { x: -36 + (n % 2) * 2.5, y: 4 + n * 3, ry: 180, rz: 0, s: 0.5, zi: n }
+                  : { x: 36 - (n % 2) * 2.5, y: -4 - n * 3, ry: 180, rz: 180, s: 0.5, zi: n };
+    } else {
+      spot = mine ? { x: -30 + n * 4, y: -30 + (n % 2) * 2.5, ry: 180, rz: 180, s: 0.5, zi: n - 5 }
+                  : { x: -30 + (n % 2) * 2.5, y: 30 - n * 4, ry: 180, rz: 270, s: 0.5, zi: n - 5 };
+    }
+    this.place(pos, spot);
+    this._release(pos);
   }
 
-  // Discarded cards (2-player game), face-down.
+  // Discarded cards (2-player game), face-down: mine bottom-right, theirs top-left.
   discard(view, pos, n) {
-    this.place(pos, { x: view === 0 ? 36 : -36, y: view === 0 ? 32 : -32, ry: 180, rz: n * 7, s: 0.6, zi: n });
-    this.setClickable(pos, null);
+    this.place(pos, { x: view === 0 ? 38 : -38, y: view === 0 ? 8 : -8, ry: 180, rz: n * 7, s: 0.6, zi: n });
+    this._release(pos);
+  }
+
+  // Show the last trick small (values = card values in play order); [] clears it.
+  showLast(values) {
+    this.lastEl.innerHTML = values.map(v => `<div class="mini ${isRed(v) ? "red" : ""}">${cardText(v)}</div>`).join("");
   }
 
   showTrump(suit) {   // suit = 0..3, or null to hide
@@ -148,18 +167,21 @@ export class Board {
       const el = document.getElementById(id); el.style.opacity = 1; el.textContent = v;
     }
   }
-  setTag(view, text, active) {
+  // text = html (or "" to hide). mate = same team as me (4 players).
+  setTag(view, text, active, mate = false) {
     const t = this.tags[view];
-    t.style.display = text ? "block" : "none";
+    t.style.display = text ? "flex" : "none";
     t.innerHTML = text || "";
     t.classList.toggle("active", !!active);
+    t.classList.toggle("mate", !!mate);
   }
 
   async reset() {     // everything back to the stack
     this.z = 60;
     this.showTrump(null);
+    this.showLast([]);
     for (let pos = 0; pos < 52; pos++) {
-      this.setClickable(pos, null);
+      this._release(pos);
       this.place(pos, { ry: 180, zi: pos / 2 });
       await sleep(20);
     }
