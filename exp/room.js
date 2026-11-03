@@ -401,7 +401,7 @@ export class Room {
         const role = id === this.me ? "you" : v === 2 ? (n === 4 ? "partner" : "opponent") : "";
         const team = n === 4 ? `Team ${i % 2 ? "B" : "A"}` : "";
         return `<div class="seat ${n === 4 ? "team" + (i % 2) : ""} ${this.swapSel === i ? "sel" : ""}" style="grid-area:${["m", "l", "t", "r"][v]}">` +
-          (host ? `<button class="sw" data-act="swap" data-i="${i}">⇄</button>` + (id && id !== this.me ? `<button class="kk" data-act="kick" data-i="${i}">✕</button>` : "") + "") +
+          (host ? `<button class="sw" data-act="swap" data-i="${i}">⇄</button>` + (id && id !== this.me ? `<button class="kk" data-act="kick" data-i="${i}">✕</button>` : "") : "") +
           `<b>${id ? this.nameOf(id) : "<i>empty</i>"}</b><small>${[team, role].filter(Boolean).join(" · ")}</small></div>`;
       }).join("");
       const areas = n === 4 ? `". t ." "l . r" ". m ."` : `". t ." ". m ."`;
