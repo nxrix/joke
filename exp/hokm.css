@@ -154,10 +154,16 @@ html[data-theme="dark"] #trump_board,
 html[data-theme="dark"] #select_trump_board > div,
 html[data-theme="dark"] #bar,
 html[data-theme="dark"] .nametag { background: #1c1c20; color: #e8e4ec; box-shadow: 0 2px 12px #0008; }
+html[data-theme="dark"] #select_trump_board > div.red,
+html[data-theme="dark"] #trump_board div.red { color: var(--card-red); }
 html[data-theme="dark"] .nametag.mate { background: #1a2740; }
 html[data-theme="dark"] .nametag.active { outline-color: #fc0; }
 html[data-theme="dark"] #counter_t1,
-html[data-theme="dark"] #counter_t2 { color: #e8e4ec; }
+html[data-theme="dark"] #counter_t2 {
+  background-color: #1c1c20;
+  color: #e8e4ec;
+  box-shadow: 0 2px 10px #0008;
+}
 html[data-theme="dark"] #log_board { background: #1c1c20; color: #e8e4ec; box-shadow: 0 0 8px #0008; }
 html[data-theme="dark"] #log .msg { background: #2a2a30; color: var(--card-black); }
 html[data-theme="dark"] #chat_row input { background: #2a2a30; color: var(--card-black); }

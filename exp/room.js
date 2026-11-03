@@ -1,6 +1,6 @@
 // room.js — nostr transport, lobby (create/join/seats/kick/bots), chat, deck plumbing.
 import * as nxstr from "https://cdn.jsdelivr.net/gh/nxrix/nxstr@1.0.2/index.js";
-import { Table } from "./deck.js?v=10";
+import { Table } from "./deck.js?v=11";
 
 const RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net"];
 const KIND = 4242;
@@ -19,7 +19,7 @@ export class Room {
 
     this.id = new URLSearchParams(location.search).get("room") || "";
     // room id format: <64-hex-pubkey>-<random>
-    this.hostId = this.id ? this.id.split("-")[0] : "";
+    this.hostId = this.id ? this.id.split("-")[0].toLowerCase() : "";
 
     this.lobby = { seats: Array(seatCount).fill(null), names: {}, banned: [], status: "lobby", gameId: null, version: 0, seatCount };
     this.sockets = {};
@@ -235,16 +235,29 @@ export class Room {
     switch (p.k) {
       case "join":
         if (!this.isHost || L.status !== "lobby") return;
-        this._ensureHostSeat();
-        if (!L.seats.includes(from)) {
-          const free = L.seats.indexOf(null);
-          if (free < 0) return;
-          L.seats[free] = from;
+        {
+          const n = L.seatCount || this.seatCount;
+          if (!Array.isArray(L.seats) || L.seats.length !== n)
+            L.seats = Array(n).fill(null);
+          // host always in seat 0
+          if (L.seats[0] !== this.me) {
+            if (L.seats.includes(this.me)) L.seats[L.seats.indexOf(this.me)] = null;
+            if (L.seats[0] != null) {
+              const free = L.seats.indexOf(null);
+              if (free >= 0) L.seats[free] = L.seats[0];
+            }
+            L.seats[0] = this.me;
+          }
+          L.names[this.me] = this.name || L.names[this.me] || "Host";
+          if (!L.seats.includes(from)) {
+            const free = L.seats.indexOf(null);
+            if (free < 0) return;
+            L.seats[free] = from;
+          }
+          L.names[from] = String(p.n || "Player").slice(0, 16);
+          this._broadcast();
+          this.renderLobby();
         }
-        L.names[from] = String(p.n || "Player").slice(0, 16);
-        // hard guarantee host is still listed before we publish
-        this._ensureHostSeat();
-        this._broadcast(); this.renderLobby();
         break;
       case "state":
         if (from !== this.hostId || p.version <= L.version) return;
@@ -267,9 +280,16 @@ export class Room {
           localStorage.lastRoom = this.id;
           if (L.status === "lobby") this.skipStart = false;
         }
-        // If host vanished from seats (bad snapshot), keep asking to join so host rebroadcasts
-        if (!this.isHost && L.status === "lobby" && this.hostId && !L.seats.includes(this.hostId) && this.name) {
-          this._startJoinLoop();
+        // Host must appear in the roster. If a bad snapshot omitted them, put them back.
+        if (this.hostId && !L.seats.includes(this.hostId)) {
+          if (L.seats[0] == null) L.seats[0] = this.hostId;
+          else {
+            const free = L.seats.indexOf(null);
+            if (free >= 0) L.seats[free] = this.hostId;
+          }
+          if (!L.names[this.hostId]) L.names[this.hostId] = "Host";
+          // also nudge host to send a fresh state
+          if (!this.isHost && L.status === "lobby" && this.name) this._startJoinLoop();
         }
         if (L.status === "playing" && L.gameId !== this.startedGame && L.seats.includes(this.me)) {
           if (this.skipStart) {
@@ -295,19 +315,33 @@ export class Room {
     }
   }
 
-  _broadcast() {
+  async _broadcast() {
     this._ensureHostSeat();
-    const L = this.lobby; L.version++;
-    // clone so JSON is a plain snapshot (no weird refs)
+    const L = this.lobby;
+    // Normalize seats length
+    const n = L.seatCount || this.seatCount;
+    if (!Array.isArray(L.seats)) L.seats = Array(n).fill(null);
+    while (L.seats.length < n) L.seats.push(null);
+    if (L.seats.length > n) L.seats.length = n;
+    // Host always seat 0 if somehow missing
+    if (!L.seats.includes(this.me)) {
+      if (L.seats[0] != null && L.seats[0] !== this.me) {
+        const free = L.seats.indexOf(null);
+        if (free >= 0) L.seats[free] = L.seats[0];
+      }
+      L.seats[0] = this.me;
+    }
+    L.names[this.me] = this.name || L.names[this.me] || "Host";
+    L.version++;
     const state = {
       seats: L.seats.slice(),
       names: { ...L.names },
-      banned: L.banned.slice(),
+      banned: (L.banned || []).slice(),
       status: L.status,
       gameId: L.gameId,
-      seatCount: L.seatCount || this.seatCount,
+      seatCount: n,
     };
-    this._publish({ k: "state", version: L.version, state });
+    await this._publish({ k: "state", version: L.version, state });
     this._saveHostLobby();
   }
   _begin() {
