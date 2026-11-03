@@ -134,3 +134,41 @@ input { font: inherit; padding: 8px 12px; border-radius: 10px; background: #eee;
 #lobby .mode button { flex: 1; }
 #lobby .mode button.on { outline: 3px solid #fc0; }
 #lobby .leave { background: #de1b45; margin-top: 4px; }
+
+/* ---------- dark theme (?theme=dark → data-theme="dark" on <html>) ---------- */
+:root[data-theme="dark"] {
+  --card-bg: #1a1214;
+  --card-black: #e8e4ec;
+  --card-red: #ff4d6d;
+  --card-back: repeating-linear-gradient(45deg, #5c1219 0 6px, #7a1822 6px 12px);
+}
+:root[data-theme="dark"] html,
+:root[data-theme="dark"],
+html[data-theme="dark"],
+html[data-theme="dark"] body { background-color: #0e0e10; color: #e8e4ec; }
+html[data-theme="dark"] body { background-color: #121214; }
+html[data-theme="dark"] .cards .card { background-color: var(--card-bg); }
+html[data-theme="dark"] .cards .card .back { border-color: #2a1a1c; }
+html[data-theme="dark"] .cards .card.t2 { outline-color: #fff3; }
+html[data-theme="dark"] #trump_board,
+html[data-theme="dark"] #select_trump_board > div,
+html[data-theme="dark"] #bar,
+html[data-theme="dark"] .nametag { background: #1c1c20; color: #e8e4ec; box-shadow: 0 2px 12px #0008; }
+html[data-theme="dark"] .nametag.mate { background: #1a2740; }
+html[data-theme="dark"] .nametag.active { outline-color: #fc0; }
+html[data-theme="dark"] #counter_t1,
+html[data-theme="dark"] #counter_t2 { color: #e8e4ec; }
+html[data-theme="dark"] #log_board { background: #1c1c20; color: #e8e4ec; box-shadow: 0 0 8px #0008; }
+html[data-theme="dark"] #log .msg { background: #2a2a30; color: var(--card-black); }
+html[data-theme="dark"] #chat_row input { background: #2a2a30; color: var(--card-black); }
+html[data-theme="dark"] #chat_row input:focus { background: #33333a; }
+html[data-theme="dark"] button { background: #e8e4ec; color: #121214; }
+html[data-theme="dark"] input { background: #2a2a30; color: #e8e4ec; }
+html[data-theme="dark"] #lobby { background: #000c; }
+html[data-theme="dark"] #lobby .panel { background: #1c1c20; color: #e8e4ec; }
+html[data-theme="dark"] #lobby .seat { background: #2a2a30; }
+html[data-theme="dark"] #lobby .seat.team0 { background: #1a2740; }
+html[data-theme="dark"] #lobby .seat.team1 { background: #3a2a18; }
+html[data-theme="dark"] #lobby .mode button { background: #2a2a30; color: #e8e4ec; }
+html[data-theme="dark"] #lobby .mode button.on { outline-color: #fc0; }
+html[data-theme="dark"] #lobby .leave { background: #de1b45; color: #fff; }

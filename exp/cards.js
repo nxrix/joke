@@ -46,7 +46,7 @@ export class Board {
     this.boardEl = boardEl;
     this.players = players;
     this.cards = [];
-    this.z = 60;
+    this.z = 0;
     for (let pos = 0; pos < 52; pos++) {
       const el = document.createElement("div");
       el.className = "card";
@@ -108,7 +108,8 @@ export class Board {
       { x: nx, y: ny + 20, rz: nr }, { x: nx - 20, y: ny, rz: nr + 90 },
       { x: nx, y: ny - 20, rz: nr + 180 }, { x: nx + 20, y: ny, rz: nr + 270 },
     ][view];
-    this.place(pos, { ...spot, zi: this.z++ });
+    // Always under the hand (hand uses zi ~13+)
+    this.place(pos, { ...spot, zi: 0 });
     this._release(pos);
   }
 
@@ -165,7 +166,7 @@ export class Board {
   }
 
   async reset() {
-    this.z = 60;
+    this.z = 0;
     this.showTrump(null);
     for (let pos = 0; pos < 52; pos++) {
       this._release(pos);

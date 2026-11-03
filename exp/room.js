@@ -1,6 +1,6 @@
 // room.js — nostr transport, lobby (create/join/seats/kick/bots), chat, deck plumbing.
 import * as nxstr from "https://cdn.jsdelivr.net/gh/nxrix/nxstr@1.0.2/index.js";
-import { Table } from "./deck.js?v=7";
+import { Table } from "./deck.js?v=10";
 
 const RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net"];
 const KIND = 4242;
@@ -18,7 +18,8 @@ export class Room {
     this.name = localStorage.nm || "";
 
     this.id = new URLSearchParams(location.search).get("room") || "";
-    this.hostId = this.id.slice(0, 64);
+    // room id format: <64-hex-pubkey>-<random>
+    this.hostId = this.id ? this.id.split("-")[0] : "";
 
     this.lobby = { seats: Array(seatCount).fill(null), names: {}, banned: [], status: "lobby", gameId: null, version: 0, seatCount };
     this.sockets = {};
@@ -52,7 +53,6 @@ export class Room {
       if (this.isHost) {
         this._restoreHostLobby();
         this._connect();
-        // Push restored state so other clients resync after our reload
         setTimeout(() => { if (this.isHost && this.id) this._broadcast(); }, 600);
       } else {
         this._connect();
@@ -111,19 +111,24 @@ export class Room {
     try {
       const snap = JSON.parse(localStorage.lobbySnap || "null");
       if (snap && snap.id === this.id && snap.lobby) {
-        Object.assign(this.lobby, snap.lobby);
-        if (!Array.isArray(this.lobby.seats) || this.lobby.seats.length !== this.seatCount) {
-          this.lobby.seats = Array(this.seatCount).fill(null);
+        const S = snap.lobby;
+        // Apply seatCount FIRST so we don't wipe seats due to a length mismatch
+        if (S.seatCount) {
+          this.seatCount = S.seatCount;
+          this.lobby.seatCount = S.seatCount;
         }
+        this.lobby.seats = Array.isArray(S.seats) ? S.seats.slice() : Array(this.seatCount).fill(null);
+        while (this.lobby.seats.length < this.seatCount) this.lobby.seats.push(null);
+        if (this.lobby.seats.length > this.seatCount) this.lobby.seats = this.lobby.seats.slice(0, this.seatCount);
+        this.lobby.names = { ...(S.names || {}) };
+        this.lobby.banned = Array.isArray(S.banned) ? S.banned.slice() : [];
+        this.lobby.status = S.status || "lobby";
+        this.lobby.gameId = S.gameId ?? null;
+        this.lobby.version = S.version || 0;
         restored = true;
       }
     } catch {}
-    if (!this.lobby.seats.includes(this.me)) {
-      const free = this.lobby.seats.indexOf(null);
-      this.lobby.seats[free >= 0 ? free : 0] = this.me;
-    }
-    this.lobby.names[this.me] = this.name || this.lobby.names[this.me] || "Host";
-    if (this.lobby.seatCount) this.seatCount = this.lobby.seatCount;
+    this._ensureHostSeat();
     return restored;
   }
 
@@ -237,6 +242,8 @@ export class Room {
           L.seats[free] = from;
         }
         L.names[from] = String(p.n || "Player").slice(0, 16);
+        // hard guarantee host is still listed before we publish
+        this._ensureHostSeat();
         this._broadcast(); this.renderLobby();
         break;
       case "state":
@@ -259,6 +266,10 @@ export class Room {
         if (L.names[this.me]) {
           localStorage.lastRoom = this.id;
           if (L.status === "lobby") this.skipStart = false;
+        }
+        // If host vanished from seats (bad snapshot), keep asking to join so host rebroadcasts
+        if (!this.isHost && L.status === "lobby" && this.hostId && !L.seats.includes(this.hostId) && this.name) {
+          this._startJoinLoop();
         }
         if (L.status === "playing" && L.gameId !== this.startedGame && L.seats.includes(this.me)) {
           if (this.skipStart) {
@@ -372,14 +383,21 @@ export class Room {
       L.status = "lobby"; L.gameId = null; L.version = 0; L.banned = [];
       localStorage.lastRoom = this.id;
       this._connect();
-      // publish initial lobby so joiners can see the host
-      setTimeout(() => this._broadcast(), 400);
+      // one publish once a relay is up (joiners get full roster on their join reply)
+      const push = () => {
+        if (!this.id) return;
+        if (Object.values(this.sockets).some(ws => ws && ws.readyState === 1)) this._broadcast();
+        else setTimeout(push, 400);
+      };
+      setTimeout(push, 300);
     } else if (act === "join") {
       if (!this._readName()) return;
       this._connect();
       this._startJoinLoop();
     } else if (act === "copy") {
-      const u = new URL(location.href); u.hash = ""; u.searchParams.set("room", this.id);
+      const u = new URL(location.href); u.hash = "";
+      u.searchParams.set("room", this.id);
+      if (this.seatCount === 2) u.searchParams.set("p", "2"); else u.searchParams.delete("p");
       navigator.clipboard.writeText(u.href);
     } else if (act === "leave") {
       this.leave();
@@ -433,15 +451,24 @@ export class Room {
         <p>You reconnected while a hand was already going. Mid-hand reconnect isn’t supported — wait for the host to finish, or leave.</p>
         <button data-act="leave" class="leave">Leave</button>`;
     } else {
+      // Keep seats array sized to seatCount
+      if (!Array.isArray(L.seats)) L.seats = Array(this.seatCount).fill(null);
+      while (L.seats.length < this.seatCount) L.seats.push(null);
+      if (L.seats.length > this.seatCount) L.seats = L.seats.slice(0, this.seatCount);
+      if (L.names[this.me] && !L.seats.includes(this.me)) {
+        const free = L.seats.indexOf(null);
+        if (free >= 0) L.seats[free] = this.me;
+      }
       const mySeat = Math.max(0, L.seats.indexOf(this.me)), n = this.seatCount;
       const viewOf = i => (n === 2 ? (i === mySeat ? 0 : 2) : (i - mySeat + 4) % 4);
       const seats = L.seats.map((id, i) => {
         const v = viewOf(i);
         const role = id === this.me ? "you" : v === 2 ? (n === 4 ? "partner" : "opponent") : "";
         const team = n === 4 ? `Team ${i % 2 ? "B" : "A"}` : "";
+        const label = id ? this.nameOf(id) : "<i>empty</i>";
         return `<div class="seat ${n === 4 ? "team" + (i % 2) : ""} ${this.swapSel === i ? "sel" : ""}" style="grid-area:${["m", "l", "t", "r"][v]}">` +
           (host ? `<button class="sw" data-act="swap" data-i="${i}">⇄</button>` + (id && id !== this.me ? `<button class="kk" data-act="kick" data-i="${i}">✕</button>` : "") : "") +
-          `<b>${id ? this.nameOf(id) : "<i>empty</i>"}</b><small>${[team, role].filter(Boolean).join(" · ")}</small></div>`;
+          `<b>${label}</b><small>${[team, role].filter(Boolean).join(" · ")}</small></div>`;
       }).join("");
       const areas = n === 4 ? `". t ." "l . r" ". m ."` : `". t ." ". m ."`;
       html = (host ? `<button data-act="copy">Copy invite link</button>` : "") +
