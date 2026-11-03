@@ -2,30 +2,9 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta http-equiv="refresh" content="0;url=index.html?p=2">
 <title>Joke - 2 players</title>
-<link rel="stylesheet" href="hokm.css?v=0">
+<script>location.replace("index.html?p=2"+location.search.replace(/^\?/,"&").replace(/&?p=2/g,""))</script>
 </head>
-<body>
-<!-- the board: counters, trump box, prompts and name tags live INSIDE it (like in joke), so they never drift when you scroll -->
-<div class="cards" id="board">
-  <div id="trump_board"><div class="red">♦</div><div class="red">♥</div><div>♣</div><div>♠</div></div>
-  <div id="counter_t1" style="opacity:0">0</div>
-  <div id="counter_t2" style="opacity:0">0</div>
-  <div id="bar"></div>
-</div>
-<div id="select_trump_board"><div class="red">♦</div><div class="red">♥</div><div>♣</div><div>♠</div></div>
-<div id="log_board">
-  <div id="log"></div>
-  <form id="chat_row" autocomplete="off">
-    <input id="chat" placeholder="Chat" dir="auto" maxlength="300">
-    <button type="submit">Send</button>
-  </form>
-</div>
-<div id="lobby"></div>
-<script type="module">
-import { runHokm } from "./hokm.js";
-runHokm(2);
-</script>
-</body>
+<body><p><a href="index.html?p=2">2 players</a></p></body>
 </html>

@@ -1,14 +1,11 @@
-/* Styles from "joke": same fonts, same card look, same vmin-based sizing. */
 :root, :host {
   --card-bg: #ffffff;
   --card-black: #1d1826;
   --card-red: #de1b45;
-  /* Card back: plain CSS pattern. To use your own image: --card-back: url("card-back.png") center/cover; */
   --card-back: repeating-linear-gradient(45deg, #27348b 0 6px, #3646b3 6px 12px);
-  --font: "estedad", system-ui, sans-serif;   /* <- main font; change the name here (and the @font-face below) to swap it */
+  --font: "estedad", system-ui, sans-serif;
 }
 
-/* Estedad (Arabic + Latin). Served by jsDelivr/fontsource. */
 @font-face { font-family: "estedad"; font-weight: 100 900; font-display: swap;
   src: url("https://cdn.jsdelivr.net/fontsource/fonts/estedad:vf@5.3.0/arabic-wght-normal.woff2") format("woff2");
   unicode-range: U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0898-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC; }
@@ -28,7 +25,7 @@ html, body { background-color: #fff; font-family: var(--font); color: #000;
              width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
 body { background-color: #eee; overflow-y: auto; }
 
-/* ---------- board & cards (as in joke) ---------- */
+/* board & cards */
 .cards { position: relative; display: flex; justify-content: center; align-items: center;
   width: var(--vmin); height: var(--vmin);
   margin: calc((var(--vh) - var(--vmin))/2) calc((var(--vw) - var(--vmin))/2);
@@ -42,14 +39,14 @@ body { background-color: #eee; overflow-y: auto; }
 .cards .card.red .front { color: var(--card-red); }
 .cards .card .back { background: var(--card-back); transform: rotateY(180deg); position: absolute;
   border-radius: inherit; border: calc(var(--vmin)/100*0.8) solid #fff; }
-/* t2 = "this card is mine": corner index + big label + outline. Every card in MY hand always has it. */
+/* t2 = mine: corner index + big label + outline */
 .cards .card.t2 .front { padding: 0 75% 80% 0; font-size: calc(var(--vmin)/100*2); cursor: pointer; }
 .cards .card .front::after { opacity: 0; transition: opacity 0.25s ease; }
 .cards .card.t2 .front::after { content: attr(after-content); position: absolute; width: 100%; height: 100%; top: 0; left: 0;
   display: flex; justify-content: center; align-items: center; opacity: 1; font-size: calc(var(--vmin)/100*3); }
 .cards .card.t2 { outline: calc(var(--vmin)/250) solid #1141; }
 
-/* ---------- trump (as in joke: select board overlay + a box in the middle of the table) ---------- */
+/* trump select overlay + table trump box */
 #select_trump_board { background-color: #0013; position: relative; display: flex; justify-content: center; align-items: center;
   --margin: calc(var(--vmin)/100*3); width: calc(var(--vw) - var(--margin)*2); height: calc(var(--vh) - var(--margin)*2);
   margin: calc(var(--margin) - var(--vh)) var(--margin) 0 var(--margin);
@@ -62,45 +59,44 @@ body { background-color: #eee; overflow-y: auto; }
 #select_trump_board div:hover { transform: scale(1.125); }
 #select_trump_board div.red { color: var(--card-red); }
 #select_trump_board.active { opacity: 1; pointer-events: auto; }
-#trump_board { background-color: #fff; border-radius: calc(var(--vmin)/100*2); position: fixed; display: flex; flex-direction: column;
-  width: calc(var(--vmin)/100*10); height: calc(var(--vmin)/100*10); transform-origin: center; user-select: none; }
+#trump_board { background-color: #fff; border-radius: calc(var(--vmin)/100*2); position: fixed; display: none; flex-direction: column;
+  width: calc(var(--vmin)/100*10); height: calc(var(--vmin)/100*10); transform-origin: center; user-select: none;
+  z-index: 5; }
+#trump_board.show { display: flex; z-index: 80; }
 #trump_board div { display: none; width: 100%; height: 100%; justify-content: center; align-items: center;
   font-size: calc(var(--vmin)/100*5); font-family: "cardr"; color: var(--card-black); }
 #trump_board div.red { color: var(--card-red); }
 
-/* ---------- score counters (inside the board, like joke) ---------- */
+/* score counters */
 #counter_t1, #counter_t2 { position: absolute; top: 3%; background-color: #fff; display: flex; justify-content: center; align-items: center;
   width: calc(var(--vmin)/100*10); height: calc(var(--vmin)/100*10); font-size: calc(var(--vmin)/100*5);
-  border-radius: calc(var(--vmin)/100*2); margin: calc(var(--vmin)/100*2); transition: opacity 0.5s ease; font-weight: 900; }
+  border-radius: calc(var(--vmin)/100*2); margin: calc(var(--vmin)/100*2); transition: opacity 0.5s ease; font-weight: 900; z-index: 5; }
 #counter_t1 { left: 3%; }  #counter_t2 { right: 3%; }
 
-/* ---------- name tags: sit right next to each player's cards, above everything ---------- */
+/* name tags — closer to center so they sit clear of the hand fan */
 .nametag { position: absolute; left: 50%; top: 50%; z-index: 1000; display: flex; align-items: center; gap: calc(var(--vmin)/100*1);
   background: #fff; border-radius: calc(var(--vmin)/100*1.5); padding: calc(var(--vmin)/100*0.7) calc(var(--vmin)/100*1.8);
   font-size: calc(var(--vmin)/100*2.3); white-space: nowrap; opacity: .9; pointer-events: none;
   transform: translate(-50%,-50%) translate(calc(var(--vmin)/100*var(--tx)), calc(var(--vmin)/100*var(--ty))) rotate(var(--rot)); }
-.nametag.v0 { --tx: 0;   --ty: 27.5; --rot: 0deg; }
-.nametag.v1 { --tx: -33; --ty: 0;    --rot: -90deg; }
-.nametag.v2 { --tx: 0;   --ty: -33;  --rot: 0deg; }
-.nametag.v3 { --tx: 33;  --ty: 0;    --rot: 90deg; }
-.nametag.mate { background: #dbeafe; }                       /* me + my partner */
+.nametag.v0 { --tx: 0;   --ty: 22;   --rot: 0deg; }
+.nametag.v1 { --tx: -28; --ty: 0;    --rot: -90deg; }
+.nametag.v2 { --tx: 0;   --ty: -28;  --rot: 0deg; }
+.nametag.v3 { --tx: 28;  --ty: 0;    --rot: 90deg; }
+.nametag.mate { background: #dbeafe; }
 .nametag.active { outline: calc(var(--vmin)/200) solid #fc0; opacity: 1; }
 .nametag .tk { opacity: .55; }
 
-/* the last trick, small, just above the trump box */
-#last_trick { position: absolute; left: 50%; top: 50%; z-index: 2; display: flex; gap: calc(var(--vmin)/100*0.6); pointer-events: none;
-  transform: translate(-50%, calc(var(--vmin)/100*-9.5)); }
-#last_trick .mini { background: #fff; border-radius: calc(var(--vmin)/100*0.8); width: calc(var(--vmin)/100*4.6); height: calc(var(--vmin)/100*5.6);
-  display: flex; justify-content: center; align-items: center; font-family: "cardr"; font-size: calc(var(--vmin)/100*2); color: var(--card-black); }
-#last_trick .mini.red { color: var(--card-red); }
+/* prompts (discard / keep) — on the board, compact like nametags so ranks stay readable */
+#bar { position: absolute; left: 50%; top: 95%; transform: translate(-50%, -50%); z-index: 1000;
+  display: none; align-items: center; gap: calc(var(--vmin)/100*1);
+  background: #fff; border-radius: calc(var(--vmin)/100*1.5);
+  padding: calc(var(--vmin)/100*0.7);
+  font-size: calc(var(--vmin)/100*2.3); white-space: nowrap;
+  box-shadow: 0 2px 10px #0002; max-width: 92%; }
+#bar button { font-size: inherit; padding: calc(var(--vmin)/100*0.5) calc(var(--vmin)/100*1.6);
+  border-radius: calc(var(--vmin)/100*1.2); }
 
-/* prompts (choose trump / discard / keep) sit in the board, above my hand */
-#bar { position: absolute; left: 50%; top: 68%; transform: translateX(-50%); z-index: 1000; display: none; align-items: center; gap: 8px;
-  background: #fff; border-radius: calc(var(--vmin)/100*2); padding: calc(var(--vmin)/100*1.2) calc(var(--vmin)/100*2.4);
-  font-size: calc(var(--vmin)/100*2.4); white-space: nowrap; }
-#bar button { font-size: inherit; padding: calc(var(--vmin)/100*0.8) calc(var(--vmin)/100*2); }
-
-/* ---------- log + chat (joke's white panel) ---------- */
+/* log + chat */
 #log_board { position: relative; height: calc(var(--vh) - var(--margin)); display: flex; flex-direction: column; gap: calc(var(--vmin)/100*2);
   --margin: calc(var(--vmin)/100*3);
   margin: calc(var(--margin)*2) var(--margin) 0 var(--margin); padding: calc(var(--vmin)/100*5); background: #fff; color: #000;
@@ -108,8 +104,6 @@ body { background-color: #eee; overflow-y: auto; }
 #log { flex: 1; min-height: 0; overflow-y: auto; }
 #log span { font-family: "cardr"; }
 #log .black { color: var(--card-black); }  #log .red { color: var(--card-red); }
-/* chat message: [name | text]. The row is always LTR so the name stays on the left;
-   the text box picks its own direction, so Persian/Arabic text is right-aligned inside it. */
 #log .msg { display: flex; align-items: baseline; gap: calc(var(--vmin)/100*2); direction: ltr; background: #f1f0f4; color: var(--card-black);
   border-radius: calc(var(--vmin)/100*2); padding: calc(var(--vmin)/100*1.2) calc(var(--vmin)/100*2); margin: calc(var(--vmin)/100*0.8) 0; }
 #log .msg .n { font-family: var(--font); flex: none; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; opacity: .7; text-align: left; }
@@ -119,11 +113,12 @@ body { background-color: #eee; overflow-y: auto; }
   padding: calc(var(--vmin)/100*2) calc(var(--vmin)/100*3); outline: none; }
 #chat_row input:focus { background: #e9e7ef; }
 #chat_row button { padding: 0 calc(var(--vmin)/100*4); }
+
 button { font: inherit; padding: 8px 14px; border-radius: 10px; background: var(--card-black); color: #fff; cursor: pointer; }
 button[disabled] { opacity: .4; }
 input { font: inherit; padding: 8px 12px; border-radius: 10px; background: #eee; width: 100%; }
 
-/* ---------- lobby: the table, drawn where the cards will be ---------- */
+/* lobby */
 #lobby { position: fixed; inset: 0; background: #000a; z-index: 50; display: flex; justify-content: center; align-items: center; }
 #lobby .panel { background: #fff; border-radius: 20px; padding: 20px; width: min(520px, 94vw); display: flex; flex-direction: column; gap: 12px; text-align: center; }
 #lobby .table { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -134,3 +129,7 @@ input { font: inherit; padding: 8px 12px; border-radius: 10px; background: #eee;
 #lobby .seat small { opacity: .6; }
 #lobby .seat button { position: absolute; top: 4px; padding: 2px 9px; font-size: 13px; border-radius: 8px; }
 #lobby .seat .sw { left: 4px; }  #lobby .seat .kk { right: 4px; }
+#lobby .mode { display: flex; gap: 8px; justify-content: center; }
+#lobby .mode button { flex: 1; }
+#lobby .mode button.on { outline: 3px solid #fc0; }
+#lobby .leave { background: #de1b45; margin-top: 4px; }
