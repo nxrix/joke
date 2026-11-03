@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Hokm — 4 players</title>
+<link rel="stylesheet" href="hokm.css">
+</head>
+<body>
+<div class="cards" id="board"></div>
+<div id="select_trump_board"><div class="red">♦</div><div class="red">♥</div><div>♣</div><div>♠</div></div>
+<div id="trump_board"><div class="red">♦</div><div class="red">♥</div><div>♣</div><div>♠</div></div>
+<div id="counter_t1" style="opacity:0"></div>
+<div id="counter_t2" style="opacity:0"></div>
+<div id="bar"></div>
+<div id="log_board">
+  <div id="log"></div>
+  <div id="chat_row"><input id="chat" placeholder="Chat…" autocomplete="off"></div>
+</div>
+<div id="lobby"></div>
+<script type="module">
+import { runHokm } from "./hokm.js";
+runHokm(4);
+</script>
+</body>
+</html>

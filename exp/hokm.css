@@ -1,0 +1,91 @@
+/* Styles taken from "joke" (same fonts, same card look, same vmin-based sizing). */
+:root, :host {
+  --card-bg: #ffffff;
+  --card-black: #1d1826;
+  --card-red: #de1b45;
+  /* Card back: plain CSS pattern. To use your own image: --card-back: url("card-back.png") center/cover; */
+  --card-back: repeating-linear-gradient(45deg, #27348b 0 6px, #3646b3 6px 12px);
+}
+@font-face { font-family: "en";    src: url("/assets/fonts/regular.woff2"); }
+@font-face { font-family: "cardr"; src: url("fonts/cardr.ttf"); }
+
+* { padding: 0; margin: 0; border: 0; box-sizing: border-box; text-align: auto !important;
+    unicode-bidi: plaintext !important; -webkit-tap-highlight-color: transparent; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background-color: #0000; }
+::-webkit-scrollbar-thumb { background-color: #2253; }
+html, body { background-color: #fff; font-family: "en", system-ui, sans-serif; color: #000;
+             width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
+body { background-color: #eee; overflow-y: auto; }
+
+/* ---------- board & cards ---------- */
+.cards { position: relative; display: flex; justify-content: center; align-items: center;
+  width: var(--vmin); height: var(--vmin);
+  margin: calc((var(--vh) - var(--vmin))/2) calc((var(--vw) - var(--vmin))/2);
+  perspective: calc(var(--vmin)); z-index: 1; }
+.cards .card { background-color: var(--card-bg); position: fixed; display: flex; flex-direction: column;
+  width: calc(var(--vmin)/100*15); height: calc(var(--vmin)/100*20); border-radius: calc(var(--vmin)/100*2);
+  user-select: none; transform-style: preserve-3d; transform-origin: center; transition: transform 0.25s ease; }
+.cards .card .front, .cards .card .back { -webkit-backface-visibility: hidden; backface-visibility: hidden; width: 100%; height: 100%; }
+.cards .card .front { position: relative; display: flex; justify-content: center; align-items: center; text-align: center;
+  font-family: "cardr"; font-size: calc(var(--vmin)/100*4); color: var(--card-black); }
+.cards .card.red .front { color: var(--card-red); }
+.cards .card .back { background: var(--card-back); transform: rotateY(180deg); position: absolute;
+  border-radius: inherit; border: calc(var(--vmin)/100*0.8) solid #fff; }
+.cards .card.t2 .front { padding: 0 75% 80% 0; font-size: calc(var(--vmin)/100*2); cursor: pointer; }
+.cards .card .front::after { opacity: 0; transition: opacity 0.25s ease; }
+.cards .card.t2 .front::after { content: attr(after-content); position: absolute; width: 100%; height: 100%; top: 0; left: 0;
+  display: flex; justify-content: center; align-items: center; opacity: 1; font-size: calc(var(--vmin)/100*3); }
+.cards .card.t2 { outline: calc(var(--vmin)/250) solid #1141; }
+
+/* ---------- trump ---------- */
+#select_trump_board { background-color: #0013; position: relative; display: flex; justify-content: center; align-items: center;
+  --margin: calc(var(--vmin)/100*3); width: calc(var(--vw) - var(--margin)*2); height: calc(var(--vh) - var(--margin)*2);
+  margin: calc(var(--margin) - var(--vh)) var(--margin) 0 var(--margin);
+  padding: calc((var(--vh) - var(--vmin))/2) calc((var(--vw) - var(--vmin))/2);
+  opacity: 0; pointer-events: none; transition: opacity 0.5s ease; border-radius: calc(var(--vmin)/100*3); z-index: 2;
+  box-shadow: 0 0 8px #1142; }
+#select_trump_board div { background-color: #fff; display: flex; justify-content: center; align-items: center; width: 100%; height: 20%;
+  margin: 5%; border-radius: calc(var(--vmin)/100*2.5); font-size: calc(var(--vmin)/100*5); user-select: none;
+  transition: transform 0.125s ease; color: var(--card-black); font-family: "cardr"; }
+#select_trump_board div:hover { transform: scale(1.125); }
+#select_trump_board div.red { color: var(--card-red); }
+#select_trump_board.active { opacity: 1; pointer-events: auto; }
+#trump_board { background-color: #fff; border-radius: calc(var(--vmin)/100*2); position: fixed; display: flex; flex-direction: column;
+  width: calc(var(--vmin)/100*10); height: calc(var(--vmin)/100*10); user-select: none; }
+#trump_board div { display: none; width: 100%; height: 100%; justify-content: center; align-items: center;
+  font-size: calc(var(--vmin)/100*5); font-family: "cardr"; color: var(--card-black); }
+#trump_board div.red { color: var(--card-red); }
+
+/* ---------- counters & name tags ---------- */
+#counter_t1, #counter_t2 { position: absolute; top: 3%; background-color: #fff; display: flex; justify-content: center; align-items: center;
+  width: calc(var(--vmin)/100*10); height: calc(var(--vmin)/100*10); font-size: calc(var(--vmin)/100*5);
+  border-radius: calc(var(--vmin)/100*2); margin: calc(var(--vmin)/100*2); transition: opacity 0.5s ease; font-weight: 900; }
+#counter_t1 { left: 3%; }  #counter_t2 { right: 3%; }
+.nametag { position: absolute; background: #fff; border-radius: calc(var(--vmin)/100*1.5); padding: calc(var(--vmin)/100*0.8) calc(var(--vmin)/100*2);
+  font-size: calc(var(--vmin)/100*2.4); z-index: 3; opacity: .85; white-space: nowrap; }
+.nametag.active { outline: calc(var(--vmin)/200) solid #fc0; opacity: 1; }
+.nametag.v0 { bottom: 1%; left: 50%; transform: translateX(-50%); }
+.nametag.v1 { left: 1%; top: 50%; transform: translateY(-50%); }
+.nametag.v2 { top: 1%; left: 50%; transform: translateX(-50%); }
+.nametag.v3 { right: 1%; top: 50%; transform: translateY(-50%); }
+
+/* ---------- log, chat, lobby ---------- */
+#log_board { position: relative; height: calc(var(--vh) - var(--margin)); overflow-y: auto; --margin: calc(var(--vmin)/100*3);
+  margin: calc(var(--margin)*2) var(--margin) 0 var(--margin); padding: calc(var(--vmin)/100*5); background: #fff; color: #000;
+  border-radius: calc(var(--vmin)/100*3) calc(var(--vmin)/100*3) 0 0; z-index: 2; box-shadow: 0 0 8px #1142; }
+#log_board span { font-family: "cardr"; }
+#log_board .black { color: var(--card-black); }  #log_board .red { color: var(--card-red); }
+#chat_row { position: sticky; bottom: calc(var(--vmin)/-100*5); background: #fff; padding-top: 8px; }
+input { font: inherit; padding: 8px 12px; border-radius: 10px; background: #eee; width: 100%; }
+button { font: inherit; padding: 8px 14px; border-radius: 10px; background: #1d1826; color: #fff; cursor: pointer; }
+button[disabled] { opacity: .4; }
+
+#lobby { position: fixed; inset: 0; background: #000a; z-index: 50; display: flex; justify-content: center; align-items: center; }
+#lobby .panel { background: #fff; border-radius: 20px; padding: 20px; width: min(420px, 92vw); display: flex; flex-direction: column; gap: 10px; text-align: center; }
+#lobby .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; background: #eee; border-radius: 10px; padding: 6px 10px; }
+#bar { position: fixed; top: calc(var(--vh)/2 - var(--vmin)/100*34); left: 50%; transform: translateX(-50%); background: #fff; border-radius: 12px;
+       padding: 8px 14px; z-index: 20; box-shadow: 0 0 8px #1142; display: none; gap: 8px; align-items: center; font-size: 14px; max-width: 94vw; }
+#bar span { font-family: inherit; }
+/* trump indicator: right edge of the square board, under the score counter */
+#trump_board { display: none; left: calc((var(--vw) + var(--vmin))/2 - var(--vmin)/100*15); top: calc((var(--vh) - var(--vmin))/2 + var(--vmin)/100*20); z-index: 3; }
