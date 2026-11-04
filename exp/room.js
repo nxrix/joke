@@ -1,4 +1,4 @@
-// room.js — nostr transport, lobby (create/join/seats/spectators/kick/bots), chat, deck plumbing,
+// room.js - nostr transport, lobby (create/join/seats/spectators/kick/bots), chat, deck plumbing,
 // and everything needed to RECONNECT in the middle of a game.
 //
 // How reconnecting works (no server, so everything is rebuilt from the relays + this browser):
@@ -285,7 +285,7 @@ export class Room {
     if (!this.gotState && !this.isHost) this.renderLobby();        // refresh the "connecting…" text
   }
 
-  // Game messages (trump / discard / keep…) — stored locally at once, published reliably.
+  // Game messages (trump / discard / keep…) - stored locally at once, published reliably.
   send(payload, as) {
     if (as) payload.as = as;
     this._publish(payload, { persist: true });
