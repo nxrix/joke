@@ -1,5 +1,5 @@
 /**
- * deck — hostless shuffled deck for card games (mental poker).
+ * deck - hostless shuffled deck for card games (mental poker).
  *
  * No server, no dealer, no transport dependency. You give it:
  *   - players: array of unique ids, SAME order on every client (= seat order)
@@ -347,7 +347,7 @@ export class Table {
   /* ----- 4. end of game: prove nobody cheated ----- */
   /**
    * Reveals my seed + secret key and audits everyone's shuffle.
-   * After this the table is burned (all hands become public) — make a new Table for the next game.
+   * After this the table is burned (all hands become public) - make a new Table for the next game.
    * Returns { ok, cheaters[], deck[], dealt{} } where deck[pos] = card number at that position,
    * so your game can also check rule-breaking (e.g. not following suit) against dealt{}.
    */
