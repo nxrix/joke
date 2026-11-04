@@ -28,7 +28,7 @@ export function runHokm(startN) {
     onNet(online, live) {
       menu.style.display = live ? "block" : "none";
       menu.classList.toggle("off", !online);
-      menu.textContent = (spec ? "👁 " : "") + "☰";
+      menu.textContent = (spec ? "👁 " : "") + "|||";
     },
   });
   menu.onclick = () => room._act("menu");
