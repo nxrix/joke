@@ -100,7 +100,10 @@ body { background-color: #eee; overflow-y: auto; }
 /* log + chat */
 #log_board { position: relative; height: calc(var(--vh) - var(--margin)); display: flex; flex-direction: column; gap: calc(var(--vmin)/100*2);
   --margin: calc(var(--vmin)/100*3);
-  margin: calc(var(--margin)*2) var(--margin) 0 var(--margin); padding: calc(var(--vmin)/100*5); background: #fff; color: #000;
+  max-width: min(450px, calc(var(--vw) - 2 * var(--margin)));
+  /*margin: calc(var(--margin)*2) var(--margin) 0 var(--margin);*/
+  margin: 0 auto;
+  padding: calc(var(--vmin)/100*5); background: #fff; color: #000;
   border-radius: calc(var(--vmin)/100*3) calc(var(--vmin)/100*3) 0 0; z-index: 2; box-shadow: 0 0 8px #1142; }
 #log { flex: 1; min-height: 0; overflow-y: auto; }
 #log span { font-family: "cardr"; }
