@@ -1,4 +1,4 @@
-// hokm.js — Hokm rules and game flow for 2 or 4 players.
+// hokm.js - Hokm rules and game flow for 2 or 4 players.
 // Layers: room.js (nostr + lobby + chat) → deck.js (shuffled deck) → this file (rules) → cards.js (visuals)
 //
 // Deck positions 0..51 are the identity of a card. Only the owner knows what a position holds.
