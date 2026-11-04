@@ -1,34 +1,49 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<title>Joke</title>
-<link rel="stylesheet" href="hokm.css?v=12">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+  <title>Joke</title>
+  <script>
+    (()=>{
+      const root = document.documentElement;
+      const resize = () => {
+        const w = innerWidth, h = innerHeight;
+        root.style.setProperty("--vw", w + "px");
+        root.style.setProperty("--vh", h + "px");
+        root.style.setProperty("--vmin", Math.min(w, h) + "px");
+        root.style.setProperty("--vmax", Math.max(w, h) + "px");
+      };
+      resize();
+      addEventListener("resize", resize);
+      const params = new URLSearchParams(location.search);
+      if (params.get("theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+    })()
+  </script>
+  <link rel="stylesheet" href="hokm.css?v=12">
 </head>
 <body>
-<div class="cards" id="board">
-  <div id="trump_board"><div class="red">♦</div><div class="red">♥</div><div>♣</div><div>♠</div></div>
-  <div id="counter_t1" style="opacity:0">0</div>
-  <div id="counter_t2" style="opacity:0">0</div>
-  <div id="bar"></div>
-</div>
-<div id="select_trump_board"><div class="red">♦</div><div class="red">♥</div><div>♣</div><div>♠</div></div>
-<div id="log_board">
-  <div id="log"></div>
-  <form id="chat_row" autocomplete="off">
-    <input id="chat" placeholder="Chat" dir="auto" maxlength="300">
-    <button type="submit">Send</button>
-  </form>
-</div>
-<button id="menu" style="display:none" title="Players, invite link, leave">☰</button>
-<div id="lobby"></div>
-<script type="module">
-import { runHokm } from "./hokm.js?v=12";
-const params = new URLSearchParams(location.search);
-if (params.get("theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
-const n = params.get("p") === "2" ? 2 : 4;
-runHokm(n);
-</script>
+  <div class="cards" id="board">
+    <div id="trump_board"><div class="red">♦</div><div class="red">♥</div><div>♣</div><div>♠</div></div>
+    <div id="counter_t1" style="opacity:0">0</div>
+    <div id="counter_t2" style="opacity:0">0</div>
+    <div id="bar"></div>
+  </div>
+  <div id="select_trump_board"><div class="red">♦</div><div class="red">♥</div><div>♣</div><div>♠</div></div>
+  <div id="log_board">
+    <div id="log"></div>
+    <form id="chat_row" autocomplete="off">
+      <input id="chat" placeholder="Chat" dir="auto" maxlength="300">
+      <button type="submit">Send</button>
+    </form>
+  </div>
+  <button id="menu" style="display:none" title="Players, invite link, leave">|||</button>
+  <div id="lobby"></div>
+  <script type="module">
+    import { runHokm } from "./hokm.js?v=12";
+    const params = new URLSearchParams(location.search);
+    const n = params.get("p") === "2" ? 2 : 4;
+    runHokm(n);
+  </script>
 </body>
 </html>
