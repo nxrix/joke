@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Joke</title>
-<link rel="stylesheet" href="hokm.css?v=11">
+<link rel="stylesheet" href="hokm.css?v=12">
 </head>
 <body>
 <div class="cards" id="board">
@@ -21,9 +21,10 @@
     <button type="submit">Send</button>
   </form>
 </div>
+<button id="menu" style="display:none" title="Players, invite link, leave">☰</button>
 <div id="lobby"></div>
 <script type="module">
-import { runHokm } from "./hokm.js?v=11";
+import { runHokm } from "./hokm.js?v=12";
 const params = new URLSearchParams(location.search);
 if (params.get("theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
 const n = params.get("p") === "2" ? 2 : 4;

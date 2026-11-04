@@ -3,8 +3,8 @@
 //
 // Deck positions 0..51 are the identity of a card. Only the owner knows what a position holds.
 // H.cards[seat] = positions in that seat's hand; H.known[tableId][pos] = card values I may see.
-import { Room } from "./room.js?v=11";
-import { Board, SUITS, suitOf, rankOf, cardSpan, beats, trickWinner, sleep, range, initViewport } from "./cards.js?v=11";
+import { Room } from "./room.js?v=12";
+import { Board, SUITS, suitOf, rankOf, cardSpan, beats, trickWinner, sleep, range, initViewport } from "./cards.js?v=12";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => "&#" + c.charCodeAt() + ";");
@@ -17,32 +17,49 @@ export function runHokm(startN) {
   let N = startN;
   const board = new Board($("board"), N);
   const bar = $("bar");
-  const room = new Room({
-    seatCount: N, lobbyEl: $("lobby"), logEl: $("log"), chatInput: $("chat"),
-    onStart, onLobby, onModeChange(n) { N = n; board.players = n; },
-  });
-
+  const menu = $("menu");
   let G = null;        // game across hands: { n, score:[t0,t1], king, gen }
   let H = null;        // current hand
   let tables = {};
   let mySeat = 0;
+  let spec = false;    // spectator: not seated, sees everything that is public
+  const room = new Room({
+    seatCount: N, lobbyEl: $("lobby"), logEl: $("log"), chatInput: $("chat"),
+    onStart, onLobby, onModeChange(n) { N = n; board.players = n; },
+    onNet(online, live) {
+      menu.style.display = live ? "block" : "none";
+      menu.classList.toggle("off", !online);
+      menu.textContent = (spec ? "👁 " : "") + "☰";
+    },
+  });
+  menu.onclick = () => room._act("menu");
+
 
   // 4p: teams {0,2} and {1,3}. 2p: each seat is its own team.
   const teamOf = s => (N === 4 ? s % 2 : s);
-  const myTeam = () => teamOf(mySeat);
+  const ref = () => (mySeat >= 0 ? mySeat : 0);          // spectators watch from seat 0's side
+  const myTeam = () => teamOf(ref());
   // Views: 0 = me (bottom), 1 = left, 2 = across, 3 = right.
-  const viewOf = s => (N === 2 ? (s === mySeat ? 0 : 2) : (s - mySeat + 4) % 4);
+  const viewOf = s => (N === 2 ? (s === ref() ? 0 : 2) : (s - ref() + 4) % 4);
+  // while catching up after a reconnect nothing is animated slowly
+  const nap = ms => (H && H.fast ? Promise.resolve() : sleep(ms));
   const nameOfSeat = s => room.nameOf(H.seats[s]);
   const setBar = html => { bar.style.display = html ? "flex" : "none"; bar.innerHTML = html || ""; bar.onclick = null; };
 
   /* =====================================================================
      GAME START / END
      ===================================================================== */
-  function onStart() {
+  function onStart(resume) {
     mySeat = room.seats.indexOf(room.me);
-    G = { n: 0, score: [0, 0], king: null, gen: room.gameId };
-    board.setScore(0, 0);
-    room.log(`Game started - first to ${POINTS_TO_WIN} points.`);
+    spec = mySeat < 0;
+    // Rejoining mid-game: the host publishes {hand number, score, king} at the start of every hand.
+    const info = room.lobby.game, cont = !!(resume && info && info.gen === room.gameId);
+    G = { n: cont ? Math.max(0, info.n - 1) : 0, score: cont ? info.score.slice() : [0, 0], king: cont ? info.king : null,
+          gen: room.gameId, resume: !!resume };
+    H = null; tables = {};
+    board.setScore(G.score[myTeam()], G.score[1 - myTeam()]);
+    room.log(resume ? (spec ? "You are watching - catching up…" : "Rejoining the game…")
+      : spec ? "You are watching this game." : `Game started - first to ${POINTS_TO_WIN} points.`);
     runHands(G);
   }
 
@@ -69,7 +86,10 @@ export function runHokm(startN) {
   async function playHand(g) {
     const id = g.gen + "." + g.n++;
     const seats = room.seats.slice();
+    const resumed = g.resume; g.resume = false;
+    room.setGameInfo({ gen: g.gen, n: g.n, score: g.score.slice(), king: g.king });   // (only the host publishes it)
     if (g.n > 1) { setBar(""); await board.reset(); }
+    if (resumed) await room.settled();              // let the relays replay this hand's history first
 
     H = {
       id, seats, king: g.king, trump: null,
@@ -80,6 +100,7 @@ export function runHokm(startN) {
       won: [0, 0],
       trick: [], plays: [], pending: [],
       turn: null, playing: false, hold: false, sent: false, step: 0, botStep: -1, finish: null,
+      fast: resumed, resumed,
     };
 
     tables = room.createTables(id, {
@@ -101,6 +122,12 @@ export function runHokm(startN) {
 
     if (N === 4) await dealFour(H.king); else await dealTwo(H.king);
 
+    if (H.resumed) {
+      // everything that already happened is still being verified – let it finish before anybody may act
+      await Promise.all(Object.values(tables).map(t => t.idle()));
+      await sleep(150);
+    }
+    H.fast = false;
     H.playing = true;
     H.turn = H.king;
     return new Promise(resolve => { H.finish = resolve; refresh(); drain(); });
@@ -113,7 +140,7 @@ export function runHokm(startN) {
     const to = H.seats[seat];
     await Promise.all(Object.entries(tables).map(async ([pid, t]) => {
       const cards = await t.deal(ps, to);
-      if (pid !== to) return;
+      if (pid !== to || !cards) return;
       ps.forEach((p, i) => {
         H.known[pid][p] = cards[i];
         if (pid === room.me) board.reveal(p, cards[i]);
@@ -156,19 +183,22 @@ export function runHokm(startN) {
       // Show the offered card face-up in the middle. No "mine" outline until it is kept.
       board.place(p, { x: 14, y: 0, ry: pid === room.me ? 0 : 180, s: 1.1, zi: 90 });
       board.setMine(p, false);
-      if (pid === room.me) room.send({ k: "draw", g: H.id, d, keep: await askKeep() });
-      else if (room.isHost && room.isBot(pid)) { await sleep(700); room.send({ k: "draw", g: H.id, d, keep: botKeep(pid, p) }, pid); }
-      const keep = !!(await room.waitFor((from, m) => m.k === "draw" && m.g === H.id && m.d === d && from === pid)).p.keep;
+      const drew = (from, m) => m.k === "draw" && m.g === H.id && m.d === d && from === pid;
+      if (!room.find(drew)) {                         // (after a reconnect the answer may already exist)
+        if (pid === room.me) room.send({ k: "draw", g: H.id, d, keep: await askKeep() });
+        else if (room.isHost && room.isBot(pid)) { await nap(700); room.send({ k: "draw", g: H.id, d, keep: botKeep(pid, p) }, pid); }
+      }
+      const keep = !!(await room.waitFor(drew)).p.keep;
 
       if (keep) {
         // Rules: keep first → it joins the hand, then look at the next card and discard it face-down.
         addHand(s, [p]);
         layout();
-        await sleep(pid === room.me ? 350 : 150);
+        await nap(pid === room.me ? 350 : 150);
         await dealTo(s, [p + 1]);
         board.place(p + 1, { x: 14, y: 0, ry: pid === room.me ? 0 : 180, s: 1.1, zi: 90 });
         board.setMine(p + 1, false);
-        await sleep(pid === room.me ? 900 : 400);
+        await nap(pid === room.me ? 900 : 400);
         throwAway(s, p + 1);
       } else {
         throwAway(s, p);
@@ -182,16 +212,19 @@ export function runHokm(startN) {
 
   async function chooseTrump(hk) {
     const pid = H.seats[hk];
-    if (pid === room.me) {
-      setBar("<span>Choose trump</span>");
-      const s = await board.askTrump();
-      setBar("");
-      room.send({ k: "trump", g: H.id, s });
-    } else if (room.isHost && room.isBot(pid)) {
-      await sleep(900);
-      room.send({ k: "trump", g: H.id, s: botTrump(hk) }, pid);
+    const chose = (from, m) => m.k === "trump" && m.g === H.id && from === pid;
+    if (!room.find(chose)) {
+      if (pid === room.me) {
+        setBar("<span>Choose trump</span>");
+        const s = await board.askTrump();
+        setBar("");
+        room.send({ k: "trump", g: H.id, s });
+      } else if (room.isHost && room.isBot(pid)) {
+        await nap(900);
+        room.send({ k: "trump", g: H.id, s: botTrump(hk) }, pid);
+      }
     }
-    const s = (await room.waitFor((from, m) => m.k === "trump" && m.g === H.id && from === pid)).p.s;
+    const s = (await room.waitFor(chose)).p.s;
     if (!Number.isInteger(s) || s < 0 || s > 3) throw new Error("bad trump");
     H.trump = s;
     board.showTrump(s);
@@ -200,9 +233,12 @@ export function runHokm(startN) {
 
   async function discardPhase(seat, count) {
     const pid = H.seats[seat];
-    if (pid === room.me) room.send({ k: "disc", g: H.id, p: await pickCards(count, `Discard ${count} card${count > 1 ? "s" : ""}`) });
-    else if (room.isHost && room.isBot(pid)) { await sleep(800); room.send({ k: "disc", g: H.id, p: botDiscard(seat, count) }, pid); }
-    const ps = (await room.waitFor((from, m) => m.k === "disc" && m.g === H.id && from === pid)).p.p;
+    const did = (from, m) => m.k === "disc" && m.g === H.id && from === pid;
+    if (!room.find(did)) {
+      if (pid === room.me) room.send({ k: "disc", g: H.id, p: await pickCards(count, `Discard ${count} card${count > 1 ? "s" : ""}`) });
+      else if (room.isHost && room.isBot(pid)) { await nap(800); room.send({ k: "disc", g: H.id, p: botDiscard(seat, count) }, pid); }
+    }
+    const ps = (await room.waitFor(did)).p.p;
     if (!Array.isArray(ps) || ps.length !== count || new Set(ps).size !== count || !ps.every(p => H.cards[seat].includes(p)))
       throw new Error(`illegal discard by ${pid.slice(0, 6)}`);
     H.cards[seat] = H.cards[seat].filter(p => !ps.includes(p));
@@ -346,7 +382,9 @@ export function runHokm(startN) {
     const pts = loserTricks > 0 ? 1 : win === kingTeam ? 2 : 3;
     g.score[win] += pts;
     board.setScore(g.score[my], g.score[1 - my]);
-    const who = N === 4 ? (win === my ? "Your team" : "The other team") : (win === mySeat ? "You" : room.nameOf(h.seats[win]));
+    const nm = s => room.nameOf(h.seats[s]);
+    const who = spec ? (N === 4 ? `${nm(win)} &amp; ${nm(win + 2)}` : nm(win))
+      : N === 4 ? (win === my ? "Your team" : "The other team") : (win === mySeat ? "You" : nm(win));
     room.log(`Hand over ${h.won[my]}-${h.won[1 - my]}. <b>${who}</b> +${pts}` + (pts === 2 ? " (kot!)" : pts === 3 ? " (king kot!!)" : "") +
       ` - score ${g.score[my]}-${g.score[1 - my]}`);
 
@@ -355,10 +393,11 @@ export function runHokm(startN) {
     const audits = Object.values(tables).map(t => t.end().then(r => ({ t, r }), err => ({ t, err })));
     const done = await Promise.race([Promise.all(audits), sleep(10000).then(() => null)]);
     if (!done) room.log("Audit timed out (somebody left?)");
-    else for (const { t, r, err } of done) if (t.me === room.me) room.log(auditText(h, r, err));
+    else for (const { t, r, err } of done) if (t === tables[room.me]) room.log(auditText(h, r, err));
 
     if (g.score[win] >= POINTS_TO_WIN) {
-      const text = N === 4 ? (win === my ? "Your team wins!" : "The other team wins!") : (win === mySeat ? "You win!" : `${room.nameOf(h.seats[win])} wins!`);
+      const text = spec ? (N === 4 ? `${nm(win)} &amp; ${nm(win + 2)} win!` : `${nm(win)} wins!`)
+        : N === 4 ? (win === my ? "Your team wins!" : "The other team wins!") : (win === mySeat ? "You win!" : `${nm(win)} wins!`);
       room.gameOver(`${text} ${g.score[my]}-${g.score[1 - my]}`);
       return h.finish(true);
     }
@@ -382,10 +421,10 @@ export function runHokm(startN) {
   function layout(opts = {}) {
     if (!H) return;
     for (let s = 0; s < N; s++) {
-      const mine = s === mySeat, K = H.known[room.me];
+      const mine = s === mySeat, K = H.known[room.me] || {};
       const ps = H.cards[s].slice();
       if (mine) ps.sort((a, b) => K[a] - K[b]);
-      board.fan(viewOf(s), ps, { raised: mine ? opts.raised : undefined });
+      board.fan(viewOf(s), ps, { raised: mine ? opts.raised : undefined, hidden: !mine });
     }
     if (opts.pick) H.cards[mySeat].forEach(p => board.setClickable(p, opts.pick));
     else if (canPlayNow()) legalPositions(mySeat, p => H.known[room.me][p]).forEach(p => board.setClickable(p, playMine));
@@ -395,7 +434,7 @@ export function runHokm(startN) {
     for (let v = 0; v < 4; v++) board.setTag(v, "", false);
     const showTricks = H.playing || H.won[0] + H.won[1] > 0;
     H.seats.forEach((pid, s) => {
-      const mate = N === 4 && teamOf(s) === myTeam();
+      const mate = !spec && N === 4 && teamOf(s) === myTeam();
       const text = `<span>${room.nameOf(pid)}${H.king === s ? " 👑" : ""}</span>` + (showTricks ? `<span class="tk">${H.won[teamOf(s)]}</span>` : "");
       board.setTag(viewOf(s), text, H.playing && H.turn === s, mate);
     });

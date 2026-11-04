@@ -87,9 +87,13 @@ export class Table {
    * @param {number}   [o.deckSize=52]
    * @param {function} [o.onCheat]  (playerId, reason) => void
    */
-  constructor({ id, players, me, send, deckSize = 52, onCheat, onOpen }) {
-    if (!players.includes(me)) throw new Error("me not in players");
-    Object.assign(this, { id: String(id), players, me, send, size: deckSize, onCheat, onOpen });
+  constructor({ id, players, me, send, deckSize = 52, onCheat, onOpen, secrets, onSecret }) {
+    // A table whose `me` is not a player is an OBSERVER (spectator): it verifies and follows the
+    // whole game, sees every card that becomes public, but never sends anything.
+    const observer = !players.includes(me);
+    Object.assign(this, { id: String(id), players, me: observer ? null : me, observer, send: send || (() => {}),
+      size: deckSize, onCheat, onOpen, sec: secrets || {}, onSecret });
+    this._inflight = 0;
     this.n = players.length;
     this.pk = {};          // id -> Point
     this.stages = Array(this.n + 1); // stages[0] = initial deck, stages[k+1] = after seat k
@@ -112,9 +116,21 @@ export class Table {
   }
 
   /* ----- plumbing ----- */
-  receive(from, msg) { if (from === this.me) return; return this._on(from, msg); }
+  // `replay` = this message is one of MY OWN old messages being fed back after a reload.
+  receive(from, msg, replay = false) { if (from === this.me && !replay) return; return this._on(from, msg); }
+
+  _save() { try { this.onSecret && this.onSecret(this.sec); } catch (e) {} }
+
+  /** resolves when no incoming message is still being verified (or after `ms`) */
+  idle(ms = 3000) {
+    return new Promise(res => {
+      const t0 = Date.now(), chk = () => (this._inflight === 0 || Date.now() - t0 > ms ? res() : setTimeout(chk, 40));
+      setTimeout(chk, 40);
+    });
+  }
 
   async _post(msg) {
+    if (this.observer) return;
     msg.g = this.id;
     this.send(msg);
     await this._on(this.me, msg);
@@ -139,6 +155,7 @@ export class Table {
   _tick() { this._w = this._w.filter(c => !c()); }
 
   async _on(from, msg) {
+    this._inflight++;
     try {
       if (!msg || msg.g !== this.id || !this.players.includes(from)) return;
       switch (msg.t) {
@@ -159,7 +176,7 @@ export class Table {
           break;
         }
         case "shares": {
-          await this._wait(() => this.deck);
+          await this._wait(() => this.deck && this.players.every(p => this.pk[p]));
           if (!Array.isArray(msg.list)) return this._cheat(from, "bad shares");
           for (const it of msg.list) { if (await this._verify(from, it)) return; }
           break;
@@ -182,24 +199,35 @@ export class Table {
       }
     } catch (e) {
       this._cheat(from, "malformed message: " + e.message);
+    } finally {
+      this._inflight--;
     }
     this._tick();
   }
 
   /* ----- 1. setup: keys + shuffle. Resolves when the deck is ready ----- */
   async start() {
-    this.x = scalar();
-    const pk = mul(G, this.x), k = scalar(), A = mul(G, k);
-    const e = await hs("key", this.id, this.me, enc(pk), enc(A));
-    await this._post({ t: "key", pk: enc(pk), A: enc(A), s: sh((k + e * this.x) % N) });
+    if (this.observer) { await this._wait(() => this.deck); return this; }
+    // secrets are persisted BEFORE anything is sent, so a reloaded page can pick up exactly where it left off
+    if (!this.sec.x) { this.sec.x = sh(scalar()); this._save(); }
+    this.x = big(this.sec.x);
+    const pk = mul(G, this.x);
+    if (!this.pk[this.me]) {                         // (not already restored from an old message of mine)
+      const k = scalar(), A = mul(G, k);
+      const e = await hs("key", this.id, this.me, enc(pk), enc(A));
+      await this._post({ t: "key", pk: enc(pk), A: enc(A), s: sh((k + e * this.x) % N) });
+    }
     await this._wait(() => this.players.every(p => this.pk[p]));
     this.H = sum(this.players.map(p => this.pk[p]));
 
     const seat = this.players.indexOf(this.me);
     await this._wait(() => this.stages[seat]);       // wait for previous seat
-    this.seed = b2h(rnd(32));
-    const out = await shuffleDeck(this.stages[seat], this.seed, this.H);
-    await this._post({ t: "shuf", seat, deck: ser(out) });
+    if (!this.sec.seed) { this.sec.seed = b2h(rnd(32)); this._save(); }
+    this.seed = this.sec.seed;
+    if (!this.stages[seat + 1]) {                    // shuffle is deterministic in (input, seed): safe to redo
+      const out = await shuffleDeck(this.stages[seat], this.seed, this.H);
+      await this._post({ t: "shuf", seat, deck: ser(out) });
+    }
     await this._wait(() => this.deck);                // wait for last seat
     return this;
   }
@@ -217,6 +245,10 @@ export class Table {
     this._chk(idx);
     if (this.dealt[idx] !== undefined && this.dealt[idx] !== to) throw new Error("already dealt to " + this.dealt[idx]);
     this.dealt[idx] = to;
+    if (this.observer) {   // just wait until everybody else has contributed, like the real players do
+      await this._wait(() => this.players.every(p => p === to || this.shares[idx]?.[p]));
+      return null;
+    }
     if (to !== this.me) { await this._share(idx); return null; }
     const others = this.players.filter(p => p !== this.me);
     await this._wait(() => others.every(p => this.shares[idx]?.[p]));
@@ -261,6 +293,7 @@ export class Table {
 
   /* shares requested in the same tick are batched into ONE message */
   _share(i) {
+    if (!this.sent.has(i) && this.shares[i]?.[this.me]) this.sent.add(i);   // already published before a reload
     if (this.sent.has(i)) return this._fp || Promise.resolve();
     this.sent.add(i);
     (this._sq ??= []).push(i);
@@ -287,11 +320,17 @@ export class Table {
   /* ----- 3. shared randomness (commit-reveal), e.g. coin flip / who starts ----- */
   /** Everyone calls with same label & max. Returns integer in [0,max). */
   async random(label, max) {
-    const v = b2h(rnd(32));
-    const c = b2h(await sha(`${this.id}|${label}|${this.me}|${v}`));
-    await this._post({ t: "commit", l: label, c });
-    await this._wait(() => this.players.every(p => this.rc[label]?.[p]));
-    await this._post({ t: "rev", l: label, v });
+    if (!this.observer) {
+      const rv = (this.sec.rv ??= {});
+      if (!rv[label]) { rv[label] = b2h(rnd(32)); this._save(); }
+      const v = rv[label];
+      const c = b2h(await sha(`${this.id}|${label}|${this.me}|${v}`));
+      if (!this.rc[label]?.[this.me]) await this._post({ t: "commit", l: label, c });
+      await this._wait(() => this.players.every(p => this.rc[label]?.[p]));
+      if (!this.rr[label]?.[this.me]) await this._post({ t: "rev", l: label, v });
+    } else {
+      await this._wait(() => this.players.every(p => this.rc[label]?.[p]));
+    }
     await this._wait(() => this.players.every(p => this.rr[label]?.[p]));
     let total = 0n;
     for (const p of this.players) {
@@ -313,7 +352,7 @@ export class Table {
    * so your game can also check rule-breaking (e.g. not following suit) against dealt{}.
    */
   async end() {
-    await this._post({ t: "end", seed: this.seed, x: sh(this.x) });
+    if (!this.observer && !this.ends[this.me]) await this._post({ t: "end", seed: this.seed, x: sh(this.x) });
     await this._wait(() => this.players.every(p => this.ends[p]));
     const bad = new Set();
     for (let j = 0; j < this.n; j++) {

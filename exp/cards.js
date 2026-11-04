@@ -85,20 +85,22 @@ export class Board {
   setClickable(pos, fn) { this.cards[pos].onclick = fn ? () => fn(pos) : null; }
   _release(pos) { this.setMine(pos, false); this.setClickable(pos, null); }
 
-  fan(view, positions, { onClick = null, raised = new Set() } = {}) {
+  // hidden = a hand I am not allowed to see, drawn at the bottom (spectators watching seat 0's side)
+  fan(view, positions, { onClick = null, raised = new Set(), hidden = false } = {}) {
     const m = positions.length, s = m / 2 - 0.5, k = 4;
     positions.forEach((pos, i) => {
       const b = s < 1 ? 0 : (1 - Math.sin(i * Math.PI / 2 / s)) * s / 4;
       const up = raised.has(pos) ? 4 : 0;
       const spot = [
-        { x: (i - s) * k * 1.4, y: 45 + b * 2 - up, rz: (i - s) * 2, s: 1.625, zi: i + 13 },
+        hidden ? { x: (i - s) * k * 1.4, y: 45 + b * 2 - up, ry: 180, rz: -(i - s) * 2, s: 1.625, zi: i + 13 }
+               : { x: (i - s) * k * 1.4, y: 45 + b * 2 - up, rz: (i - s) * 2, s: 1.625, zi: i + 13 },
         { x: -45 - b * 2 + up, y: (i - s) * k, rx: 180, rz: 90 - (i - s) * 2, zi: i },
         { x: (i - s) * k, y: -45 - b * 2 + up, ry: 180, rz: 180 + (i - s) * 2, zi: m - i },
         { x: 45 + b * 2 - up, y: (i - s) * k, rx: 180, rz: 270 + (i - s) * 2, zi: m - i },
       ][view];
       this.place(pos, spot);
-      this.setMine(pos, view === 0);
-      this.setClickable(pos, view === 0 ? onClick : null);
+      this.setMine(pos, view === 0 && !hidden);
+      this.setClickable(pos, view === 0 && !hidden ? onClick : null);
     });
   }
 
