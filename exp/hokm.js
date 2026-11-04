@@ -4,7 +4,7 @@
 // Deck positions 0..51 are the identity of a card. Only the owner knows what a position holds.
 // H.cards[seat] = positions in that seat's hand; H.known[tableId][pos] = card values I may see.
 import { Room } from "./room.js?v=12";
-import { Board, SUITS, suitOf, rankOf, cardSpan, beats, trickWinner, sleep, range, initViewport } from "./cards.js?v=12";
+import { Board, SUITS, suitOf, rankOf, cardSpan, beats, trickWinner, sleep, range } from "./cards.js?v=12";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => "&#" + c.charCodeAt() + ";");
@@ -13,7 +13,6 @@ const TRICKS_TO_WIN = 7;
 const POINTS_TO_WIN = 7;
 
 export function runHokm(startN) {
-  initViewport();
   let N = startN;
   const board = new Board($("board"), N);
   const bar = $("bar");
