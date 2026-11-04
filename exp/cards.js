@@ -25,20 +25,6 @@ export function trickWinner(trick, trump) {
   return best.seat;
 }
 
-/* ---------- viewport sizing ---------- */
-export function initViewport() {
-  const root = document.documentElement;
-  const resize = () => {
-    const w = innerWidth, h = innerHeight;
-    root.style.setProperty("--vw", w + "px");
-    root.style.setProperty("--vh", h + "px");
-    root.style.setProperty("--vmin", Math.min(w, h) + "px");
-    root.style.setProperty("--vmax", Math.max(w, h) + "px");
-  };
-  resize();
-  addEventListener("resize", resize);
-}
-
 /* ---------- the board ---------- */
 // Views: 0 = me (bottom), 1 = left, 2 = across (top), 3 = right
 export class Board {
